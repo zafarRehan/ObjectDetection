@@ -6,18 +6,25 @@ from model import Detector
 from loss import DetectionLoss
 from dataset import data_generator
 from utils import process_prediction, draw_bbox
+from config import Config
 
 class DetectionTrainer:
     def __init__(self,):
         self.detector = Detector()
         self.detection_loss = DetectionLoss()
+        self.device = Config.DEVICE
 
     def train(self, train_params):
         self.train_settings = train_params
         img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
 
 
-        optimizer = optim.Adam(self.detector.parameters(), lr=train_params.LEARNING_RATE)
+        if train_params.OPTIMIZER == 'adam':
+            optimizer = optim.Adam(self.detector.parameters(), lr=train_params.LEARNING_RATE)
+        else:
+            optimizer = optim.SGD(self.detector.parameters(), lr=train_params.LEARNING_RATE)
+
+            
  
         self.detector.train()
         for step in range(max(train_params.NUM_EPOCHS, train_params.NUM_STEPS)):
@@ -26,7 +33,7 @@ class DetectionTrainer:
 
             # img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
-            pred = self.detector(torch.permute(torch.Tensor(data), (0, 3, 1, 2)))
+            pred = self.detector(torch.permute(torch.Tensor(data, device=self.device), (0, 3, 1, 2)))
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
             total_loss = box_loss + class_loss
             # print(total_loss, class_loss, box_loss)
@@ -37,6 +44,7 @@ class DetectionTrainer:
 
             if step%100 == 0 and step:
                 self.save_log(step, img, label)
+                self.save_checkpoint(step)
 
 
     def save_log(self, step, data, label):
@@ -59,6 +67,11 @@ class DetectionTrainer:
         if len(img_stack):
             cv2.imwrite(f'{self.train_settings.image_write_path}/output_{step}.png', np.hstack(img_stack))
             cv2.imwrite(f'{self.train_settings.image_write_path}/input_{step}.png', np.hstack(lab_stack))
+
+
+    def save_checkpoint(self, step):
+        torch.save(self.detector.state_dict(), f'{self.train_settings.checkpoint_write_path}/checkpoint_{step}.pt')
+        torch.save(self.detector, f'{self.train_settings.checkpoint_write_path}/checkpointModel_{step}.pt')
 
 
 

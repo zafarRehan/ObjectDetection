@@ -18,7 +18,10 @@ class TrainingParameters:
         
         self.writer = SummaryWriter(f"logs/train")
         self.image_write_path = f"{args.exp_name}/images"
+        self.checkpoint_write_path = f"{args.exp_name}/checkpoints"
         os.makedirs(self.image_write_path, exist_ok=True)
+        os.makedirs(self.checkpoint_write_path, exist_ok=True)
+
 
 if __name__ == '__main__':
 

@@ -7,7 +7,7 @@ class TrainingConfig:
     IMAGE_SIZE = 320
     CHANNELS_IMG = 3
     NUM_EPOCHS = 5
-    NUM_STEPS = 1000
+    NUM_STEPS = 10000
     OPTIMIZER = 'adam'
 
 

@@ -1,11 +1,13 @@
 import torch 
 from utils import create_anchors, multibox_target
-from config import DatasetConfig
+from config import DatasetConfig, Config
+
 class DetectionLoss:
     anchors = create_anchors(
                     sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
                     input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
         )
+    anchors.to(Config.DEVICE)
     
     def __init__(self):
         # self.anchors = create_anchors(
