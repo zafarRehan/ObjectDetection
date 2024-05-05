@@ -13,6 +13,7 @@ class DetectionTrainer:
         self.detector = Detector()
         self.detection_loss = DetectionLoss()
         self.device = Config.DEVICE
+        self.detector.to(self.device)
 
     def train(self, train_params):
         self.train_settings = train_params
@@ -31,8 +32,9 @@ class DetectionTrainer:
             self.detector.zero_grad()
             # optimizer.zero_grad()
 
-            # img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
+            img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
+            label = label.to(self.device)
             pred = self.detector(torch.permute(torch.Tensor(data, device=self.device), (0, 3, 1, 2)))
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
             total_loss = box_loss + class_loss
