@@ -9,11 +9,15 @@ from utils import process_prediction, draw_bbox
 from config import Config
 
 class DetectionTrainer:
-    def __init__(self,):
-        self.detector = Detector()
+    def __init__(self, path=None):
+        self.detector = Detector() 
+        if path is not None:
+            self.detector.load_state_dict(torch.load(path))
+
         self.detection_loss = DetectionLoss()
         self.device = Config.DEVICE
         self.detector.to(self.device)
+
 
     def train(self, train_params):
         self.train_settings = train_params
@@ -25,7 +29,7 @@ class DetectionTrainer:
         else:
             optimizer = optim.SGD(self.detector.parameters(), lr=train_params.LEARNING_RATE)
 
-            
+        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=optimizer, lr_lambda=lambda step: 0.95)
  
         self.detector.train()
         for step in range(max(train_params.NUM_EPOCHS, train_params.NUM_STEPS)):
@@ -34,19 +38,20 @@ class DetectionTrainer:
 
             img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
-            label = label.to(self.device)
-            pred = self.detector(torch.permute(torch.Tensor(data, device=self.device), (0, 3, 1, 2)))
+            label = torch.Tensor(label).to(self.device)
+            pred = self.detector(torch.permute(torch.Tensor(data).to(self.device), (0, 3, 1, 2)))
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
-            total_loss = box_loss + class_loss
-            # print(total_loss, class_loss, box_loss)
+            total_loss = (box_loss*5 + class_loss)
             total_loss.backward()
             optimizer.step()
 
             print(f'step: {step}         box_loss: {box_loss}        class_loss: {class_loss}')
 
-            if step%100 == 0 and step:
+            if step%10 == 0 and step:
                 self.save_log(step, img, label)
                 self.save_checkpoint(step)
+                scheduler.step()
+                print(f"learning_rate: {optimizer.param_groups[-1]['lr']}")
 
 
     def save_log(self, step, data, label):
@@ -56,10 +61,10 @@ class DetectionTrainer:
         bsize = 5
 
         with torch.no_grad():
-            # data, label = next(data_generator(batch_size=bsize, nObjects=5))
+            data, label = next(data_generator(batch_size=bsize, nObjects=5))
             batch_pred = self.detector.infer(data['image'])
             for i in range(bsize):
-                pred = process_prediction(batch_pred[i], confidence=0.0)
+                pred = process_prediction(batch_pred[i], confidence=0.4)
                 if len(pred) > 0:
                     box_img = draw_bbox(data['image'][i], pred[:10])
                     box_img_ = draw_bbox(data['image'][i], label[i], pred=False)

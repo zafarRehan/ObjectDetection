@@ -35,14 +35,7 @@ class DetectionLoss:
         predicted_box = predicted_box[bbox_masks > 0]
 
         loss = self.box_criterion(predicted_box, bbox_labels)
-
-
-        # print(bbox_labels.shape)
-
-        # print(bbox_masks.sum(dim=1), torch.sum(bbox_masks.sum(dim=1)))
-        # print((2100*8 - cls_labels[:,:,15].sum())*4)
-        # loss = self.box_criterion((bbox_labels*bbox_masks).view(-1), (predicted_box*bbox_masks).view(-1))
-        # print(loss)
+        # loss = self.box_criterion(predicted_box*bbox_masks, bbox_labels*bbox_masks)
         return loss, cls_labels
 
 

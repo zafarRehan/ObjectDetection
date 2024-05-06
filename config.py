@@ -2,8 +2,8 @@ import torch
 
 
 class TrainingConfig:
-    LEARNING_RATE = 0.001  
-    BATCH_SIZE = 8
+    LEARNING_RATE = 0.0001  
+    BATCH_SIZE = 2
     IMAGE_SIZE = 320
     CHANNELS_IMG = 3
     NUM_EPOCHS = 5

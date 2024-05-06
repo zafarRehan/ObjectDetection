@@ -237,27 +237,36 @@ Explained here:  https://medium.com/analytics-vidhya/non-max-suppression-nms-662
 """
 def non_max_supression(predictions, conf_threshold, iou_threshold):
     # print(predictions.shape, conf_threshold, iou_threshold)
-    indexes = np.where((predictions[:, 1] > conf_threshold))
-    predictions = predictions[indexes]
+    # indexes = np.where((predictions[:, 1] > conf_threshold))
+    # predictions = predictions[indexes]
+    predictions = predictions[predictions[:, 1] > conf_threshold]
+    # predictions_n = predictions.numpy()
 
     # sort the predictions in decreasing order of accuracy
-    sortedArr = predictions[predictions[:,1].argsort()][::-1]
-    print(sortedArr[:10])
+    # sortedArrN = predictions_n[predictions_n[:,1].argsort()][::-1]
+    sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
+    # print(sortedArrN[:10], sortedArr[:10])
+    # print(sortedArr[:5])
 
     # if there is no element left after filtering return the empty array
     if sortedArr.shape[0] == 0:
         return  sortedArr
 
     # create a final array with first element from sorted array already in place
-    final_list = np.array([sortedArr[0]])
+    # final_list = np.array([sortedArr[0]])
+    final_list = sortedArr[0].unsqueeze(dim=0)
     sortedArr = sortedArr[1:]
     for element in sortedArr:
-
+        # print(element)
         # if same class is already present in target list
         if element[0] in final_list[:, 0]:
 
             # get the indexes of all present same elements
             indexes_present = np.where(final_list[:, 0]==element[0])[0]
+            print('indexes_present', indexes_present)
+            indexes_present = (final_list[:, 0]==element[0])[0]
+            print('indexes_present', indexes_present)
+
 
             # calclulate iou for all present same class element
             # print('indexes_present: ', indexes_present)
@@ -291,22 +300,24 @@ def process_prediction(prediction, confidence=0.25):
                 ) 
     if prediction.dim() == 2:
         prediction = torch.unsqueeze(prediction, dim=0)
-    with torch.no_grad():
-        predicted_cls, predicted_box = prediction[:, :, 4:], prediction[:, :, :4]
-        # multibox_target(anchors=anchors, labels=prediction)
-        # return
-        inversed_pred_boxes = offset_inverse(anchors[0], predicted_box[0])
-        predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=0)
-        class_ids = np.argmax(predicted_cls, axis=1)
-        # print(predicted_cls.shape, class_ids.shape)
-        conf = np.max(predicted_cls.numpy(), axis=1)
-        # print(conf.shape)
-        class_prob = np.stack((class_ids, conf), axis=-1)
-        combined = np.concatenate([class_prob, inversed_pred_boxes], axis=1)
-        indexes = np.where((combined[:, 0] < 15))
-        combined = combined[indexes].astype(np.float16)
-        detetctions = non_max_supression(combined, conf_threshold=confidence, iou_threshold=0.5)
-        return detetctions
+    # with torch.no_grad():
+    predicted_cls, predicted_box = prediction[:, :, 4:], prediction[:, :, :4]
+    inversed_pred_boxes = offset_inverse(anchors[0], predicted_box[0])
+    predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=0)
+
+    # class_ids = np.argmax(predicted_cls, axis=1)
+    # conf = np.max(predicted_cls.numpy(), axis=1)
+    conf, class_ids = torch.max(predicted_cls, dim=1)
+
+    # class_prob = np.stack((class_ids, conf), axis=-1)
+    class_prob = torch.cat((class_ids.view(-1, 1), conf.view(-1, 1)), dim=1)
+    # combined = np.concatenate([class_prob, inversed_pred_boxes], axis=1)
+    combined = torch.cat((class_prob, inversed_pred_boxes), dim=1)
+    # indexes = np.where((combined[:, 0] < 15))
+    # combined = combined[indexes]
+    combined = combined[combined[:, 0] < DatasetConfig.N_CLASSES]  # N_CLASSES is the background class 0 to N_CLASSES-1 are actual classes
+    detetctions = non_max_supression(combined, conf_threshold=0.1, iou_threshold=0.5)
+    return detetctions
 
 def draw_bbox(img, labels, pred=True):
     h,w,_ = img.shape
@@ -317,7 +328,7 @@ def draw_bbox(img, labels, pred=True):
         else:
             x1, y1, x2, y2 = label[:4]
             cls = np.argmax(label[4:])
-            print(cls, x1, y1, x2, y2 )
+            # print(cls, x1, y1, x2, y2 )
         img = cv2.rectangle(img, (int(x1*w), int(y1*h)), (int(x2*w), int(y2*h)), color=(255,0,0), thickness=2)
         img = cv2.putText(img, str(int(cls)), org=(int(x1*w), int(y1*h)-5), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(255,0,0), thickness=2, lineType=cv2.LINE_AA)
     return img
