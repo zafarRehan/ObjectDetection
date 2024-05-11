@@ -4,8 +4,8 @@ from config import DatasetConfig, Config
 
 class DetectionLoss:
     anchors = create_anchors(
-                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
-                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
+                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
+                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
         )
     anchors = anchors.to(Config.DEVICE)
     
@@ -66,12 +66,13 @@ class DetectionLoss:
         # label_box = label[:, :, :4]
         # label_class = label[:, :, 4:]
 
-        predicted_box = prediction[:, :, :4].reshape(BATCH_SIZE, -1, 8400)
+        # predicted_box = prediction[:, :, :4].reshape(BATCH_SIZE, -1, 8400)
+        predicted_box = prediction[:, :, :4].reshape(BATCH_SIZE, -1)
         predicted_box = torch.squeeze(predicted_box, dim=1)
         predicted_class = prediction[:, :, 4:]
 
         bbox_loss, cls_labels = self.box_loss(label, predicted_box)
-        # print(cls_labels.sum(dim=1))
+        # print(predicted_box.shape)
         class_loss = self.class_loss(cls_labels, predicted_class)
 
         return bbox_loss, class_loss

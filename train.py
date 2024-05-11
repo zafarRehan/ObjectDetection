@@ -3,15 +3,15 @@ from torch.utils.tensorboard import SummaryWriter  # to print to tensorboard
 import os
 import argparse
 from trainer import DetectionTrainer
-from config import TrainingConfig
+from config import TrainingConfig, DatasetConfig
 
 
 class TrainingParameters:
     def __init__(self, args):
         self.LEARNING_RATE = TrainingConfig.LEARNING_RATE  
         self.BATCH_SIZE = TrainingConfig.BATCH_SIZE
-        self.IMAGE_SIZE = TrainingConfig.IMAGE_SIZE
-        self.CHANNELS_IMG = TrainingConfig.CHANNELS_IMG
+        self.IMAGE_SIZE = DatasetConfig.IMAGE_SIZE
+        self.CHANNELS_IMG = DatasetConfig.IMAGE_CHANNELS
         self.NUM_EPOCHS = TrainingConfig.NUM_EPOCHS
         self.NUM_STEPS = TrainingConfig.NUM_STEPS
         self.OPTIMIZER = TrainingConfig.OPTIMIZER
@@ -31,6 +31,6 @@ if __name__ == '__main__':
 
 
     tp = TrainingParameters(args)
-    trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_3600.pt")
-    # trainer = DetectionTrainer()
+    trainer = DetectionTrainer()
+    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_4000.pt")
     trainer.train(train_params=tp)

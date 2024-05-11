@@ -11,10 +11,11 @@ from config import Config
 class DetectionTrainer:
     def __init__(self, path=None):
         self.detector = Detector() 
-        if path is not None:
-            self.detector.load_state_dict(torch.load(path))
-
         self.detection_loss = DetectionLoss()
+
+        if path is not None:
+            self.detector.load(path=path)
+
         self.device = Config.DEVICE
         self.detector.to(self.device)
 
@@ -22,36 +23,44 @@ class DetectionTrainer:
     def train(self, train_params):
         self.train_settings = train_params
         img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
+        self.optimizer = self.init_optimizer()
+        trained_step = 0
+        if self.detector.checkpoint is not None:
+            self.optimizer.load_state_dict(self.detector.checkpoint['optimizer_state_dict'])
+            trained_step = self.detector.checkpoint['step']
+        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=self.optimizer, lr_lambda=lambda step: 0.95)
 
-
-        if train_params.OPTIMIZER == 'adam':
-            optimizer = optim.Adam(self.detector.parameters(), lr=train_params.LEARNING_RATE)
-        else:
-            optimizer = optim.SGD(self.detector.parameters(), lr=train_params.LEARNING_RATE)
-
-        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=optimizer, lr_lambda=lambda step: 0.95)
- 
         self.detector.train()
-        for step in range(max(train_params.NUM_EPOCHS, train_params.NUM_STEPS)):
+        for step in range(trained_step, max(train_params.NUM_EPOCHS, train_params.NUM_STEPS)):
             self.detector.zero_grad()
             # optimizer.zero_grad()
 
             img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
             label = torch.Tensor(label).to(self.device)
-            pred = self.detector(torch.permute(torch.Tensor(data).to(self.device), (0, 3, 1, 2)))
+            # pred = self.detector(torch.permute(torch.Tensor(data).to(self.device), (0, 3, 1, 2)))
+            pred = self.detector.infer(data)
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
-            total_loss = (box_loss*5 + class_loss)
+            total_loss = (box_loss + class_loss)
             total_loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             print(f'step: {step}         box_loss: {box_loss}        class_loss: {class_loss}')
 
-            if step%10 == 0 and step:
+            if step%500 == 0 and (step-trained_step):
                 self.save_log(step, img, label)
                 self.save_checkpoint(step)
                 scheduler.step()
-                print(f"learning_rate: {optimizer.param_groups[-1]['lr']}")
+                print(f"learning_rate: {self.optimizer.param_groups[-1]['lr']}")
+
+
+    def init_optimizer(self):
+        if self.train_settings.OPTIMIZER == 'adam':
+            optimizer = optim.Adam(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
+        else:
+            optimizer = optim.SGD(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
+        return optimizer
+        
 
 
     def save_log(self, step, data, label):
@@ -77,8 +86,8 @@ class DetectionTrainer:
 
 
     def save_checkpoint(self, step):
-        torch.save(self.detector.state_dict(), f'{self.train_settings.checkpoint_write_path}/checkpoint_{step}.pt')
-        torch.save(self.detector, f'{self.train_settings.checkpoint_write_path}/checkpointModel_{step}.pt')
+        self.detector.save(step=step, path=f'{self.train_settings.checkpoint_write_path}/checkpoint_{step}.pt', optim=self.optimizer)
+        # torch.save(self.detector, f'{self.train_settings.checkpoint_write_path}/checkpointModel_{step}.pt')
 
 
 

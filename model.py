@@ -1,36 +1,55 @@
 import torch.nn as nn
 import torch
+from config import Config, DatasetConfig
 
 
 class Detector(nn.Module):
     def __init__(self):
         super(Detector, self).__init__()
             
-        self.conv1 = CMBBolock(in_channels=3, out_channels=16, kernel_size=3, padding='same')
+        self.conv1 = CMBBolock(in_channels=DatasetConfig.IMAGE_CHANNELS, out_channels=16, kernel_size=3, padding='same')
         self.conv2 = CMBBolock(in_channels=16, out_channels=32, kernel_size=3, padding='same')
         self.conv3 = CMBBolock(in_channels=32, out_channels=64, kernel_size=3, padding='same')
 
-        self.conv4 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding='same', bias=False)
-        self.conv5 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding='same', bias=False)
-        self.conv6 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding='same', bias=False)
+        self.conv4 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding='same', bias=True)
+        self.conv5 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding='same', bias=True)
+        self.conv6 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding='same', bias=True)
+        self.conv7 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=0, bias=True)
+        self.conv8 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=0, bias=True)
+
 
         self.bnorm4 = nn.BatchNorm2d(num_features=128)
         self.bnorm5 = nn.BatchNorm2d(num_features=256)
+        self.bnorm6 = nn.BatchNorm2d(num_features=256)
+
 
         self.class20x20 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding='same')     
         self.class10x10 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, padding='same')
         self.class5x5 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, padding='same')
+        self.class3x3 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, padding='same')
+        self.class1x1 = nn.Conv2d(in_channels=512, out_channels=64, kernel_size=3, padding='same')
+
 
         self.box20x20_1 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding='same')
         self.box10x10_1 = nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding='same')
         self.box5x5_1 = nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding='same')
+        self.box3x3_1 = nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, padding='same')
+        self.box1x1_1 = nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, padding='same')
+
+
 
         self.box20x20_2 = nn.Conv2d(in_channels=64, out_channels=16, kernel_size=3, padding='same')
         self.box10x10_2 = nn.Conv2d(in_channels=128, out_channels=16, kernel_size=3, padding='same')
         self.box5x5_2 = nn.Conv2d(in_channels=128, out_channels=16, kernel_size=3, padding='same')
+        self.box3x3_2 = nn.Conv2d(in_channels=128, out_channels=16, kernel_size=3, padding='same')
+        self.box1x1_2 = nn.Conv2d(in_channels=128, out_channels=16, kernel_size=3, padding='same')
+
 
         self.maxpool2d = nn.MaxPool2d(kernel_size=2)
         self.relu = nn.ReLU()
+
+        self.out_class_shape = DatasetConfig.N_CLASSES + 1
+        self.checkpoint = None
         
 
     def forward(self, x):
@@ -51,9 +70,17 @@ class Detector(nn.Module):
         conv_6 = self.conv6(bnorm_5)
         conv_6 = self.relu(conv_6)
         maxpool2d_6 = self.maxpool2d(conv_6) # 5x5x256
+        bnorm_6 = self.bnorm6(maxpool2d_6)
+
+        conv_7 = self.conv7(bnorm_6)
+        conv_7 = self.relu(conv_7) # 3x3x256
+
+        conv_8 = self.conv8(conv_7)
+        conv_8 = self.relu(conv_8) # 1x1x512
+ 
 
         class_20x20 = self.class20x20(maxpool2d_4)
-        class_20x20_reshape = Reshape(last_dim_shape=16)(class_20x20)
+        class_20x20_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_20x20)
 
         box_20x20 = self.box20x20_1(maxpool2d_4)
         box_20x20 = self.relu(box_20x20)
@@ -61,7 +88,7 @@ class Detector(nn.Module):
         box_20x20_reshape = Reshape(last_dim_shape=4)(box_20x20)
 
         class_10x10 = self.class10x10(maxpool2d_5)
-        class_10x10_reshape = Reshape(last_dim_shape=16)(class_10x10)
+        class_10x10_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_10x10)
 
         box_10x10 = self.box10x10_1(maxpool2d_5)
         box_10x10 = self.relu(box_10x10)
@@ -69,27 +96,61 @@ class Detector(nn.Module):
         box_10x10_reshape = Reshape(last_dim_shape=4)(box_10x10)
 
         class_5x5 = self.class5x5(maxpool2d_6)
-        class_5x5_reshape = Reshape(last_dim_shape=16)(class_5x5)
+        class_5x5_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_5x5)
 
         box_5x5 = self.box5x5_1(maxpool2d_6)
         box_5x5 = self.relu(box_5x5)
         box_5x5 = self.box5x5_2(box_5x5)
         box_5x5_reshape = Reshape(last_dim_shape=4)(box_5x5)
 
-        # print(class_20x20.shape, class_10x10.shape, class_5x5.shape)
+        class_3x3 = self.class3x3(conv_7)
+        class_3x3_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_3x3)
+
+        box_3x3 = self.box3x3_1(conv_7)
+        box_3x3 = self.relu(box_3x3)
+        box_3x3 = self.box3x3_2(box_3x3)
+        box_3x3_reshape = Reshape(last_dim_shape=4)(box_3x3)
+
+        class_1x1 = self.class1x1(conv_8)
+        class_1x1_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_1x1)
+
+        box_1x1 = self.box1x1_1(conv_8)
+        box_1x1 = self.relu(box_1x1)
+        box_1x1 = self.box1x1_2(box_1x1)
+        box_1x1_reshape = Reshape(last_dim_shape=4)(box_1x1)
+
+        # print(class_20x20.shape, class_10x10.shape, class_5x5.shape, class_3x3.shape, class_1x1.shape)
         # print(class_20x20_reshape.shape, class_10x10_reshape.shape, class_5x5_reshape.shape)
 
-        class_out = Concatenate(dim=1)([class_20x20_reshape, class_10x10_reshape, class_5x5_reshape])
-        box_out = Concatenate(dim=1)([box_20x20_reshape, box_10x10_reshape, box_5x5_reshape])
+        class_out = Concatenate(dim=1)([class_20x20_reshape, class_10x10_reshape, class_5x5_reshape, class_3x3_reshape, class_1x1_reshape])
+        box_out = Concatenate(dim=1)([box_20x20_reshape, box_10x10_reshape, box_5x5_reshape, box_3x3_reshape, box_1x1_reshape])
 
         final_output = Concatenate(dim=2)([box_out, class_out])
         return final_output
     
 
     def infer(self, input):
-        input = torch.Tensor(input)
+        input = torch.Tensor(input).to(Config.DEVICE)
         return self.forward(torch.permute(input, (0, 3, 1, 2)))
+    
 
+    def save(self, optim:torch.optim, step:int, path):
+        torch.save({
+                        'model_state_dict': self.state_dict(),
+                        'optimizer_state_dict': optim.state_dict(),
+                        'step': step,
+                    }, path)
+
+
+    def load(self, path):
+        self.checkpoint = torch.load(path)
+        print(self.checkpoint.keys())
+        self.load_state_dict(self.checkpoint['model_state_dict'])
+
+
+    def save_torchscript(self, path):
+        model_scripted = torch.jit.script(self) # Export to TorchScript
+        model_scripted.save(path) # Save
 
 
 

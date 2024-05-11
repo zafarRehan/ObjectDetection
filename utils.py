@@ -155,7 +155,7 @@ def multibox_target(anchors, labels):
 def offset_inverse(anchors, offset_preds):
     """Predict bounding boxes based on anchor boxes with predicted offsets."""
     anc = box_corner_to_center(anchors)
-    print(anchors.shape, offset_preds.shape)
+    # print(anchors.shape, offset_preds.shape)
     pred_bbox_xy = (offset_preds[:, :2] * anc[:, 2:] / 10) + anc[:, :2]
     pred_bbox_wh = torch.exp(offset_preds[:, 2:] / 5) * anc[:, 2:]
     pred_bbox = torch.cat((pred_bbox_xy, pred_bbox_wh), axis=1)
@@ -202,7 +202,7 @@ def box_corner_to_center(cords):
     new_cords[:, 1] = cords[:, 1] + (cords[:, 3] - cords[:, 1]) / 2
     new_cords[:, 2] = cords[:, 2] - cords[:, 0]
     new_cords[:, 3] = cords[:, 3] - cords[:, 1]
-    return cords
+    return new_cords
 
 
 def box_center_to_corner(cords):
@@ -211,7 +211,7 @@ def box_center_to_corner(cords):
     new_cords[:, 1] = cords[:, 1] - cords[:, 3] / 2
     new_cords[:, 2] = cords[:, 2] + cords[:, 0]
     new_cords[:, 3] = cords[:, 3] + cords[:, 1]
-    return cords
+    return new_cords
 
 
 def create_anchors(
@@ -246,7 +246,7 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
     # sortedArrN = predictions_n[predictions_n[:,1].argsort()][::-1]
     sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
     # print(sortedArrN[:10], sortedArr[:10])
-    # print(sortedArr[:5])
+    print(sortedArr[:5])
 
     # if there is no element left after filtering return the empty array
     if sortedArr.shape[0] == 0:
@@ -263,15 +263,16 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
 
             # get the indexes of all present same elements
             indexes_present = np.where(final_list[:, 0]==element[0])[0]
-            print('indexes_present', indexes_present)
-            indexes_present = (final_list[:, 0]==element[0])[0]
-            print('indexes_present', indexes_present)
+            # print('indexes_present', indexes_present)
+            # indexes_present = (final_list[:, 0]==element[0])[0]
+            # print('indexes_present', indexes_present)
 
 
             # calclulate iou for all present same class element
             # print('indexes_present: ', indexes_present)
             # print('shapes: ', element[2:].reshape(1, 4).shape, final_list[indexes_present, 2:].shape)
-            ious = box_iou(torch.Tensor(element[2:]).reshape(1, 4), torch.Tensor(final_list[indexes_present, 2:]))
+            ious = box_iou(element[2:].reshape(1, 4), final_list[indexes_present, 2:])
+            # ious = box_iou(torch.Tensor(element[2:]).reshape(1, 4), torch.Tensor(final_list[indexes_present, 2:]))
 
             # get indexes of all ious above iou_threshold
             # print('ious: ', ious)
@@ -289,15 +290,15 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
 
 
 
-# anchors = create_anchors(
-#                     sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
-#                     input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
-#                 ) 
-def process_prediction(prediction, confidence=0.25):
-    anchors = create_anchors(
-                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
-                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
+anchors = create_anchors(
+                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
+                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
                 ) 
+def process_prediction(prediction, confidence=0.25):
+    # anchors = create_anchors(
+    #                 sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
+    #                 input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
+    #             ) 
     if prediction.dim() == 2:
         prediction = torch.unsqueeze(prediction, dim=0)
     # with torch.no_grad():
@@ -316,7 +317,7 @@ def process_prediction(prediction, confidence=0.25):
     # indexes = np.where((combined[:, 0] < 15))
     # combined = combined[indexes]
     combined = combined[combined[:, 0] < DatasetConfig.N_CLASSES]  # N_CLASSES is the background class 0 to N_CLASSES-1 are actual classes
-    detetctions = non_max_supression(combined, conf_threshold=0.1, iou_threshold=0.5)
+    detetctions = non_max_supression(combined, conf_threshold=confidence, iou_threshold=0.5)
     return detetctions
 
 def draw_bbox(img, labels, pred=True):
