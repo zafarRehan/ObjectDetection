@@ -15,6 +15,8 @@ class TrainingParameters:
         self.NUM_EPOCHS = TrainingConfig.NUM_EPOCHS
         self.NUM_STEPS = TrainingConfig.NUM_STEPS
         self.OPTIMIZER = TrainingConfig.OPTIMIZER
+        self.SAVE_INTERVAL = TrainingConfig.SAVE_INTERVAL
+
         
         self.writer = SummaryWriter(f"logs/train")
         self.image_write_path = f"{args.exp_name}/images"
@@ -32,5 +34,5 @@ if __name__ == '__main__':
 
     tp = TrainingParameters(args)
     trainer = DetectionTrainer()
-    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_4000.pt")
+    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_11200.pt")
     trainer.train(train_params=tp)

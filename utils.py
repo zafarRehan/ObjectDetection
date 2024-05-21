@@ -1,7 +1,7 @@
 import torch 
 import cv2
 import numpy as np
-from config import DatasetConfig
+from config import DatasetConfig, Config
 
 
 def is_notebook() -> bool:
@@ -209,8 +209,8 @@ def box_center_to_corner(cords):
     new_cords = torch.zeros_like(cords, device=cords.device)
     new_cords[:, 0] = cords[:, 0] - cords[:, 2] / 2
     new_cords[:, 1] = cords[:, 1] - cords[:, 3] / 2
-    new_cords[:, 2] = cords[:, 2] + cords[:, 0]
-    new_cords[:, 3] = cords[:, 3] + cords[:, 1]
+    new_cords[:, 2] = cords[:, 2] + new_cords[:, 0]
+    new_cords[:, 3] = cords[:, 3] + new_cords[:, 1]
     return new_cords
 
 
@@ -237,24 +237,26 @@ Explained here:  https://medium.com/analytics-vidhya/non-max-suppression-nms-662
 """
 def non_max_supression(predictions, conf_threshold, iou_threshold):
     # print(predictions.shape, conf_threshold, iou_threshold)
-    # indexes = np.where((predictions[:, 1] > conf_threshold))
-    # predictions = predictions[indexes]
-    predictions = predictions[predictions[:, 1] > conf_threshold]
+    predictions = predictions.numpy()
+    indexes = np.where((predictions[:, 1] > conf_threshold))
+    predictions = predictions[indexes]
+    # predictions = predictions[predictions[:, 1] > conf_threshold]
     # predictions_n = predictions.numpy()
 
     # sort the predictions in decreasing order of accuracy
-    # sortedArrN = predictions_n[predictions_n[:,1].argsort()][::-1]
-    sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
+    sortedArr = predictions[predictions[:,1].argsort()][::-1]
+    print(sortedArr)
+    # sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
     # print(sortedArrN[:10], sortedArr[:10])
-    print(sortedArr[:5])
+    # print(sortedArr[:5])
 
     # if there is no element left after filtering return the empty array
     if sortedArr.shape[0] == 0:
         return  sortedArr
 
     # create a final array with first element from sorted array already in place
-    # final_list = np.array([sortedArr[0]])
-    final_list = sortedArr[0].unsqueeze(dim=0)
+    final_list = np.array([sortedArr[0]])
+    # final_list = sortedArr[0].unsqueeze(dim=0)
     sortedArr = sortedArr[1:]
     for element in sortedArr:
         # print(element)
@@ -271,8 +273,8 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
             # calclulate iou for all present same class element
             # print('indexes_present: ', indexes_present)
             # print('shapes: ', element[2:].reshape(1, 4).shape, final_list[indexes_present, 2:].shape)
-            ious = box_iou(element[2:].reshape(1, 4), final_list[indexes_present, 2:])
-            # ious = box_iou(torch.Tensor(element[2:]).reshape(1, 4), torch.Tensor(final_list[indexes_present, 2:]))
+            # ious = box_iou(element[2:].reshape(1, 4), final_list[indexes_present, 2:])
+            ious = box_iou(torch.Tensor(element[2:]).reshape(1, 4), torch.Tensor(final_list[indexes_present, 2:]))
 
             # get indexes of all ious above iou_threshold
             # print('ious: ', ious)
@@ -294,16 +296,19 @@ anchors = create_anchors(
                     sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
                     input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
                 ) 
+anchors = anchors.to(Config.DEVICE)
 def process_prediction(prediction, confidence=0.25):
     # anchors = create_anchors(
     #                 sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
     #                 input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
-    #             ) 
+    #  
     if prediction.dim() == 2:
         prediction = torch.unsqueeze(prediction, dim=0)
     # with torch.no_grad():
     predicted_cls, predicted_box = prediction[:, :, 4:], prediction[:, :, :4]
     inversed_pred_boxes = offset_inverse(anchors[0], predicted_box[0])
+    # print(inversed_pred_boxes.shape)
+
     predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=0)
 
     # class_ids = np.argmax(predicted_cls, axis=1)
@@ -323,22 +328,33 @@ def process_prediction(prediction, confidence=0.25):
 def draw_bbox(img, labels, pred=True):
     h,w,_ = img.shape
     img = img[:,:,::-1]*255
+    display_str = ''
     for label in labels:
         if pred:
             cls, conf, x1, y1, x2, y2 = label
+            display_str = str(int(cls)) + '_' + str(round(conf, 2))
+            # print(cls, conf, x1, y1, x2, y2 )
         else:
             x1, y1, x2, y2 = label[:4]
             cls = np.argmax(label[4:])
-            # print(cls, x1, y1, x2, y2 )
+            display_str = str(int(cls))
         img = cv2.rectangle(img, (int(x1*w), int(y1*h)), (int(x2*w), int(y2*h)), color=(255,0,0), thickness=2)
-        img = cv2.putText(img, str(int(cls)), org=(int(x1*w), int(y1*h)-5), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(255,0,0), thickness=2, lineType=cv2.LINE_AA)
+        img = cv2.putText(img, display_str, org=(int(x1*w), int(y1*h)-5), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(255,0,0), thickness=2, lineType=cv2.LINE_AA)
     return img
 
 
 if __name__ == '__main__':
-    img = cv2.imread('dataset/backgrounds/image_1.jpg')
-    h, w = img.shape[:2]
-    print(h, w)
-    X = torch.rand(size=(1, 3, h, w))  # Construct input data
-    Y = multibox_prior(X, sizes=[0.75, 0.5, 0.25], ratios=[1, 2, 0.5])
-    print(Y.shape)
+    # img = cv2.imread('dataset/backgrounds/image_1.jpg')
+    # h, w = img.shape[:2]
+    # print(h, w)
+    # X = torch.rand(size=(1, 3, h, w))  # Construct input data
+    # Y = multibox_prior(X, sizes=[0.75, 0.5, 0.25], ratios=[1, 2, 0.5])
+    # print(Y.shape)
+
+    x = np.array([[0.04756945,  0.34774306,  0.4030382,   0.59036458]])
+    x = torch.Tensor(x)
+    print(x)
+    x = box_corner_to_center(x)
+    print(x)
+    x = box_center_to_corner(x)
+    print(x)

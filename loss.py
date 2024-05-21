@@ -14,7 +14,7 @@ class DetectionLoss:
         #             sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
         #             input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
         # )
-        self.box_criterion = torch.nn.MSELoss()
+        self.box_criterion = torch.nn.MSELoss(reduction='mean')
         self.class_criterion = torch.nn.CrossEntropyLoss()
         
 
@@ -31,11 +31,20 @@ class DetectionLoss:
         # print(f'predicted_box: {predicted_box.shape}')
         # print((predicted_box*bbox_masks).shape)
 
+        loss = self.box_criterion(bbox_labels*bbox_masks, predicted_box*bbox_masks)
+        # loss = loss/bbox_labels.shape[0]
+        # print(predicted_box.shape)
+
         bbox_labels = bbox_labels[bbox_masks > 0]
         predicted_box = predicted_box[bbox_masks > 0]
+        # loss = self.box_criterion(predicted_box, bbox_labels)
+        # print(predicted_box.shape)
 
-        loss = self.box_criterion(predicted_box, bbox_labels)
-        # loss = self.box_criterion(predicted_box*bbox_masks, bbox_labels*bbox_masks)
+
+
+        # print(torch.abs(predicted_box-bbox_labels)[:10].view(-1, 1))
+        # print(predicted_box[:10].view(-1, 1), bbox_labels[:10].view(-1, 1))
+
         return loss, cls_labels
 
 
@@ -68,7 +77,7 @@ class DetectionLoss:
 
         # predicted_box = prediction[:, :, :4].reshape(BATCH_SIZE, -1, 8400)
         predicted_box = prediction[:, :, :4].reshape(BATCH_SIZE, -1)
-        predicted_box = torch.squeeze(predicted_box, dim=1)
+        # predicted_box = torch.squeeze(predicted_box, dim=1)
         predicted_class = prediction[:, :, 4:]
 
         bbox_loss, cls_labels = self.box_loss(label, predicted_box)
@@ -85,4 +94,8 @@ class DetectionLoss:
 
 
         
+if __name__ == '__main__':
+
+    print(DetectionLoss.anchors)
+    print(DetectionLoss.anchors.shape)
         
