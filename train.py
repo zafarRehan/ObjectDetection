@@ -34,5 +34,5 @@ if __name__ == '__main__':
 
     tp = TrainingParameters(args)
     trainer = DetectionTrainer()
-    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_11200.pt")
+    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_1900.pt")
     trainer.train(train_params=tp)

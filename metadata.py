@@ -52,6 +52,7 @@ def get_animals():
         'file': 'penguin.png',
         'boxes': [0.16666667, 0.83333333, 0.05555556, 0.88888889]}
     }
+    
     # storing image with the animals dictionary for easy image access
     for class_id, values in animals.items():
         png_file = Image.open(os.path.join('dataset/animals', values['file'])).convert('RGBA')

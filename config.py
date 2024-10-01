@@ -2,12 +2,12 @@ import torch
 
 
 class TrainingConfig:
-    LEARNING_RATE = 0.0002
+    LEARNING_RATE = 0.0003
     BATCH_SIZE = 16
     NUM_EPOCHS = 5
     NUM_STEPS = 20000
     OPTIMIZER = 'adam'
-    SAVE_INTERVAL = 200
+    SAVE_INTERVAL = 100
 
 
 class DatasetConfig:

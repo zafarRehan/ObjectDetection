@@ -1,6 +1,6 @@
 import torch 
 from utils import create_anchors, multibox_target
-from config import DatasetConfig, Config
+from config import DatasetConfig, Config, TrainingConfig
 
 class DetectionLoss:
     anchors = create_anchors(
@@ -14,8 +14,11 @@ class DetectionLoss:
         #             sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
         #             input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
         # )
-        self.box_criterion = torch.nn.MSELoss(reduction='mean')
-        self.class_criterion = torch.nn.CrossEntropyLoss()
+        self.box_criterion = torch.nn.L1Loss(reduction='none')
+        self.class_criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        self.n_classes = DatasetConfig.N_CLASSES + 1
+
+
         
 
     def box_loss(self, label, predicted_box):
@@ -31,15 +34,14 @@ class DetectionLoss:
         # print(f'predicted_box: {predicted_box.shape}')
         # print((predicted_box*bbox_masks).shape)
 
-        loss = self.box_criterion(bbox_labels*bbox_masks, predicted_box*bbox_masks)
+        loss = self.box_criterion(bbox_labels*bbox_masks, predicted_box*bbox_masks).mean(dim=1)
         # loss = loss/bbox_labels.shape[0]
         # print(predicted_box.shape)
 
-        bbox_labels = bbox_labels[bbox_masks > 0]
-        predicted_box = predicted_box[bbox_masks > 0]
+        # bbox_labels = bbox_labels[bbox_masks > 0]
+        # predicted_box = predicted_box[bbox_masks > 0]
         # loss = self.box_criterion(predicted_box, bbox_labels)
         # print(predicted_box.shape)
-
 
 
         # print(torch.abs(predicted_box-bbox_labels)[:10].view(-1, 1))
@@ -48,7 +50,7 @@ class DetectionLoss:
         return loss, cls_labels
 
 
-    def class_loss(self, cls_labels, prediction_class):
+    def class_loss(self, cls_labels, prediction_class, b_size):
         """
         For class loss the classes are not already softmaxed from model so they are passed
         through "softmax_cross_entropy_with_logits" which calculates the softmax inplace and calculates
@@ -62,10 +64,32 @@ class DetectionLoss:
         because whatever value the unwanted predicted boxes have doesnt matters here and considering them will
         incur unwanted loss addition in training
         """
+        # print(prediction_class.shape)
+        # softmaxed = torch.nn.functional.softmax(prediction_class, dim=2)
+        # print(softmaxed[0][0])
+        # print(torch.sum(softmaxed, dim=2), torch.sum(softmaxed, dim=2).shape)
+
         # print(torch.nn.functional.softmax(prediction_class, dim=0).shape, cls_labels.shape)
         # amax = torch.argmax(cls_labels, dim=2)
         # print(amax[0][amax[0] < 15])
-        loss = self.class_criterion(prediction_class.view(-1, DatasetConfig.N_CLASSES+1), cls_labels.view(-1, DatasetConfig.N_CLASSES+1))
+
+        # loss = self.class_criterion(prediction_class.view(-1, DatasetConfig.N_CLASSES+1), cls_labels.view(-1, DatasetConfig.N_CLASSES+1))
+        # loss = self.class_criterion(prediction_class.reshape(-1, DatasetConfig.N_CLASSES+1), cls_labels.reshape(-1, DatasetConfig.N_CLASSES+1))
+        # loss = self.class_criterion(prediction_class.reshape(TrainingConfig.BATCH_SIZE*2140, 16 ), cls_labels.reshape(TrainingConfig.BATCH_SIZE*2140, 16))
+        
+        # print(torch.argmax(cls_labels, dim=2)[:100])
+        # loss = self.class_criterion(prediction_class, torch.argmax(cls_labels, dim=2))
+
+        ############ this is good ##############
+        # loss = self.class_criterion(prediction_class, cls_labels)
+
+        loss = self.class_criterion(prediction_class.reshape(-1, self.n_classes), 
+                                    torch.argmax(cls_labels, dim=2).reshape(-1)).reshape(b_size, -1).mean(dim=1)
+        
+        # print(self.log_softmax(prediction_class).shape, cls_labels.shape)
+        # print(self.log_softmax(prediction_class)[0][0], cls_labels[0][0])
+
+        # loss = self.nll_loss(self.log_softmax(prediction_class), torch.argmax(cls_labels, dim=2))
         return loss
 
     def calculate_loss(self, label, prediction):
@@ -82,8 +106,9 @@ class DetectionLoss:
 
         bbox_loss, cls_labels = self.box_loss(label, predicted_box)
         # print(predicted_box.shape)
-        class_loss = self.class_loss(cls_labels, predicted_class)
+        class_loss = self.class_loss(cls_labels, predicted_class, BATCH_SIZE)
 
+        # print(class_loss, bbox_loss)
         return bbox_loss, class_loss
     
 

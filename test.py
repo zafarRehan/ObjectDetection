@@ -33,5 +33,29 @@ import torch.nn as nn
 # print("Computed loss:", loss)
 
 
-checkpoint = torch.jit.load('/home/rehan/projects/pytorch/torch_weights/yolov8m.torchscript')
-print(checkpoint)
+# checkpoint = torch.jit.load('/home/rehan/projects/pytorch/torch_weights/yolov8m.torchscript')
+# print(checkpoint)
+
+# print(torch.empty(3, dtype=torch.long).random_(5))
+
+# loss = nn.CrossEntropyLoss()
+# input = torch.randn(16, 3, 5, requires_grad=True)
+# target = torch.randn(16, 3, 5).softmax(dim=2)
+# output = loss(input, target)
+# output2 = loss(torch.squeeze(input), torch.squeeze(target))
+
+
+# print(input.shape, target.shape, output.shape, output, output2.shape, output2)
+
+
+N, C = 5, 4
+loss = nn.NLLLoss()
+# input is of size N x C x height x width
+data = torch.randn(N, 16, 10, 10)
+conv = nn.Conv2d(16, C, (3, 3))
+m = nn.LogSoftmax(dim=3)
+# each element in target has to have 0 <= value < C
+target = torch.empty(N, 8, 8, dtype=torch.long).random_(0, C)
+output = loss(m(conv(data)), target)
+
+print(m(conv(data)).shape, target.shape, output.shape, output)

@@ -309,10 +309,11 @@ def process_prediction(prediction, confidence=0.25):
     inversed_pred_boxes = offset_inverse(anchors[0], predicted_box[0])
     # print(inversed_pred_boxes.shape)
 
-    predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=0)
+    predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=1)
 
     # class_ids = np.argmax(predicted_cls, axis=1)
     # conf = np.max(predicted_cls.numpy(), axis=1)
+    # print(predicted_cls.shape, predicted_cls[:10])
     conf, class_ids = torch.max(predicted_cls, dim=1)
 
     # class_prob = np.stack((class_ids, conf), axis=-1)

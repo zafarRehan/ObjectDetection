@@ -45,11 +45,11 @@ class DetectionTrainer:
 
             self.detector.zero_grad()
             # self.optimizer.zero_grad()
-            total_loss = (box_loss + class_loss)
-            total_loss.backward()
+            total_loss = (50*box_loss) + class_loss
+            total_loss.mean().backward()
             self.optimizer.step()
 
-            print(f'step: {step}         box_loss: {box_loss}        class_loss: {class_loss}')
+            print(f'step: {step}         box_loss: {50*box_loss.mean()}        class_loss: {class_loss.mean()}       total_loss:  {total_loss.mean()}')
 
             if step%self.train_settings.SAVE_INTERVAL == 0 and (step-trained_step):
                 self.save_log(step, img, label, self.detector)
@@ -74,9 +74,10 @@ class DetectionTrainer:
         img_stack = []
         lab_stack = []
         bsize = 4
+        data, label = next(data_generator(batch_size=bsize, nObjects=5))
+
 
         with torch.no_grad():
-            # data, label = next(data_generator(batch_size=bsize, nObjects=5))
             batch_pred = model.infer(data['image'])
             for i in range(bsize):
                 lab = label[i]
