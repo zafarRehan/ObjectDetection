@@ -3,6 +3,23 @@ import cv2
 import numpy as np
 from config import DatasetConfig, Config
 
+colors = [
+    (0, 0, 255),  # Blue
+    (0, 255, 0),  # Green
+    (255, 0, 0),  # Red
+    (255, 255, 0),  # Yellow
+    (0, 255, 255),  # Cyan
+    (255, 0, 255),  # Magenta
+    (128, 128, 128),  # Gray
+    (128, 0, 0),  # Maroon
+    (0, 128, 0),  # Dark Green
+    (0, 0, 128),  # Navy Blue
+    (128, 128, 0),  # Olive Green
+    (0, 128, 128),  # Teal
+    (128, 0, 128),  # Purple
+    (255, 128, 0),  # Orange
+    (0, 128, 255)  # Sky Blue
+]
 
 def is_notebook() -> bool:
     try:
@@ -214,15 +231,13 @@ def box_center_to_corner(cords):
     return new_cords
 
 
-def create_anchors(
-                sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
-                input_shapes = [[20, 20, 3], [10, 10, 3], [5, 5, 3], [3, 3, 3], [1, 1, 3]]
-                ):
+def create_anchors(sizes, input_shapes):
     ratios = [0.5, 1, 2]
     output_anchors = multibox_prior(torch.zeros(input_shapes[0]), sizes=sizes[0], ratios=ratios)
     # print(output_anchors.shape)
     for i in range(1,len(sizes)):
         anchors_t = multibox_prior(torch.zeros(input_shapes[i]), sizes=[0.75, 0.5], ratios=[1, 2, 0.5])
+        # anchors_t = multibox_prior(torch.zeros(input_shapes[i]), sizes=sizes[i], ratios=ratios)
         # print(anchors_t.shape)
         output_anchors = torch.concat([output_anchors, anchors_t], axis=1)
         
@@ -236,26 +251,31 @@ overlapping output boxes. Check comments inside function for details
 Explained here:  https://medium.com/analytics-vidhya/non-max-suppression-nms-6623e6572536
 """
 def non_max_supression(predictions, conf_threshold, iou_threshold):
-    # print(predictions.shape, conf_threshold, iou_threshold)
-    predictions = predictions.numpy()
-    indexes = np.where((predictions[:, 1] > conf_threshold))
-    predictions = predictions[indexes]
-    # predictions = predictions[predictions[:, 1] > conf_threshold]
+    print(predictions.shape, conf_threshold, iou_threshold)
+    # predictions = predictions.numpy()
+    # indexes = np.where((predictions[:, 1] > conf_threshold))
+    # predictions = predictions[indexes]
+
+    predictions = predictions[predictions[:, 1] > conf_threshold]
+    
     # predictions_n = predictions.numpy()
 
     # sort the predictions in decreasing order of accuracy
-    sortedArr = predictions[predictions[:,1].argsort()][::-1]
-    print(sortedArr)
-    # sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
+    # sortedArr = predictions[predictions[:,1].argsort()][::-1]
+    sortedArr = predictions[predictions[:,1].argsort()][::].flip(dims=(0,))
     # print(sortedArrN[:10], sortedArr[:10])
-    # print(sortedArr[:5])
+    print(sortedArr[:5])
 
     # if there is no element left after filtering return the empty array
     if sortedArr.shape[0] == 0:
         return  sortedArr
 
     # create a final array with first element from sorted array already in place
-    final_list = np.array([sortedArr[0]])
+    # final_list = torch.stack((sortedArr[0]), axis=0)
+    final_list = sortedArr[0]
+    final_list = final_list.reshape(1, final_list.shape[0])
+    
+
     # final_list = sortedArr[0].unsqueeze(dim=0)
     sortedArr = sortedArr[1:]
     for element in sortedArr:
@@ -264,9 +284,9 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
         if element[0] in final_list[:, 0]:
 
             # get the indexes of all present same elements
-            indexes_present = np.where(final_list[:, 0]==element[0])[0]
+            # indexes_present = np.where(final_list[:, 0]==element[0])[0]
             # print('indexes_present', indexes_present)
-            # indexes_present = (final_list[:, 0]==element[0])[0]
+            indexes_present = final_list[:, 0] == element[0]
             # print('indexes_present', indexes_present)
 
 
@@ -274,29 +294,36 @@ def non_max_supression(predictions, conf_threshold, iou_threshold):
             # print('indexes_present: ', indexes_present)
             # print('shapes: ', element[2:].reshape(1, 4).shape, final_list[indexes_present, 2:].shape)
             # ious = box_iou(element[2:].reshape(1, 4), final_list[indexes_present, 2:])
-            ious = box_iou(torch.Tensor(element[2:]).reshape(1, 4), torch.Tensor(final_list[indexes_present, 2:]))
+            # print(indexes_present, final_list.shape)
+            # print(element.shape, final_list.shape, final_list[indexes_present].shape)
+            ious = box_iou(element[2:].reshape(1, 4), final_list[indexes_present, 2:])
 
             # get indexes of all ious above iou_threshold
             # print('ious: ', ious)
-            ious_indexes = np.where(ious[0, :] > iou_threshold)[0]
+            # ious_indexes = np.where(ious[0, :] > iou_threshold)[0]
+            ious_indexes = ious[0, :] > iou_threshold
+
 
             # if there is no element present which alraedy has an iou of
             # over 0.5 with current element then push it
             # print('ious_indexes: ', ious_indexes)
             if ious_indexes.size == 0:
-                final_list = np.vstack([final_list, element])
+                # print('elemenet_shape: ', element.reshape(1, -1).shape)
+                final_list = torch.concatenate((final_list, element.reshape(1, -1)), axis=0)
         else:
             # else push the element into the final list
-            final_list = np.vstack([final_list, element])
-    return final_list
+            # print('elemenet_shape: ', element.reshape(1, -1).shape)
+            final_list = torch.concatenate((final_list, element.reshape(1, -1)), axis=0)
+        # print('final_list_shape: ', final_list.shape)
+    return final_list.cpu().numpy()
 
 
 
-anchors = create_anchors(
+anchors_g = create_anchors(
                     sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
                     input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
                 ) 
-anchors = anchors.to(Config.DEVICE)
+anchors_g = anchors_g.to(Config.DEVICE).detach()
 def process_prediction(prediction, confidence=0.25):
     # anchors = create_anchors(
     #                 sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
@@ -306,7 +333,7 @@ def process_prediction(prediction, confidence=0.25):
         prediction = torch.unsqueeze(prediction, dim=0)
     # with torch.no_grad():
     predicted_cls, predicted_box = prediction[:, :, 4:], prediction[:, :, :4]
-    inversed_pred_boxes = offset_inverse(anchors[0], predicted_box[0])
+    inversed_pred_boxes = offset_inverse(anchors_g[0], predicted_box[0])
     # print(inversed_pred_boxes.shape)
 
     predicted_cls = torch.nn.functional.softmax(predicted_cls[0], dim=1)
@@ -339,8 +366,8 @@ def draw_bbox(img, labels, pred=True):
             x1, y1, x2, y2 = label[:4]
             cls = np.argmax(label[4:])
             display_str = str(int(cls))
-        img = cv2.rectangle(img, (int(x1*w), int(y1*h)), (int(x2*w), int(y2*h)), color=(255,0,0), thickness=2)
-        img = cv2.putText(img, display_str, org=(int(x1*w), int(y1*h)-5), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(255,0,0), thickness=2, lineType=cv2.LINE_AA)
+        img = cv2.rectangle(img, (int(x1*w), int(y1*h)), (int(x2*w), int(y2*h)), color=colors[int(cls)], thickness=2)
+        img = cv2.putText(img, display_str, org=(int(x1*w), int(y1*h)-5), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=colors[int(cls)], thickness=2, lineType=cv2.LINE_AA)
     return img
 
 

@@ -29,13 +29,13 @@ class DetectionTrainer:
         if self.detector.checkpoint is not None:
             self.optimizer.load_state_dict(self.detector.checkpoint['optimizer_state_dict'])
             trained_step = self.detector.checkpoint['step']
-        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=self.optimizer, lr_lambda=lambda step: 0.8)
+        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=self.optimizer, lr_lambda=lambda step: train_params.LR_DECAY_RATE)
 
         
 
         self.detector.train()
         for step in range(trained_step, max(train_params.NUM_EPOCHS, train_params.NUM_STEPS)):
-
+            self.optimizer.zero_grad()
             img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
             label = torch.Tensor(label).to(self.device)
@@ -43,16 +43,15 @@ class DetectionTrainer:
             pred = self.detector.infer(data)
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
 
-            self.detector.zero_grad()
-            # self.optimizer.zero_grad()
-            total_loss = (50*box_loss) + class_loss
+            # self.detector.zero_grad()
+            total_loss = box_loss + class_loss
             total_loss.mean().backward()
             self.optimizer.step()
 
-            print(f'step: {step}         box_loss: {50*box_loss.mean()}        class_loss: {class_loss.mean()}       total_loss:  {total_loss.mean()}')
+            print(f'step: {step}         box_loss: {box_loss.mean()}        class_loss: {class_loss.mean()}       total_loss:  {total_loss.mean()}')
 
             if step%self.train_settings.SAVE_INTERVAL == 0 and (step-trained_step):
-                self.save_log(step, img, label, self.detector)
+                self.save_log(step, img, label.cpu().numpy())
                 self.save_checkpoint(step)
 
                 if step%(self.train_settings.SAVE_INTERVAL*5) == 0:
@@ -69,21 +68,21 @@ class DetectionTrainer:
         
 
 
-    def save_log(self, step, data, label, model):
+    def save_log(self, step, data, label):
         # write info to log and save images
         img_stack = []
         lab_stack = []
         bsize = 4
-        data, label = next(data_generator(batch_size=bsize, nObjects=5))
+        data, label = next(data_generator(batch_size=bsize, nObjects=4))
 
 
         with torch.no_grad():
-            batch_pred = model.infer(data['image'])
+            batch_pred = self.detector.infer(data['image'])
             for i in range(bsize):
                 lab = label[i]
                 label_box = np.hstack([np.argmax(lab[:, 4:], axis=1).reshape(-1, 1), lab[:, :4]])
                 print(label_box)
-                pred = process_prediction(batch_pred[i], confidence=0.4)
+                pred = process_prediction(batch_pred[i], confidence=0.25)
                 if len(pred) > 0:
                     box_img = draw_bbox(data['image'][i], pred[:10])
                     box_img_ = draw_bbox(data['image'][i], label[i], pred=False)
@@ -91,20 +90,10 @@ class DetectionTrainer:
                     lab_stack.append(box_img_)
         
         if len(img_stack):
-            cv2.imwrite(f'{self.train_settings.image_write_path}/output_{step}.png', np.hstack(img_stack))
-            cv2.imwrite(f'{self.train_settings.image_write_path}/input_{step}.png', np.hstack(lab_stack))
+            cv2.imwrite(f'{self.train_settings.image_write_path}/{step}_output.png', np.hstack(img_stack))
+            cv2.imwrite(f'{self.train_settings.image_write_path}/{step}_input.png', np.hstack(lab_stack))
 
 
     def save_checkpoint(self, step):
         self.detector.save(step=step, path=f'{self.train_settings.checkpoint_write_path}/checkpoint_{step}.pt', optim=self.optimizer)
         # torch.save(self.detector, f'{self.train_settings.checkpoint_write_path}/checkpointModel_{step}.pt')
-
-
-
-    # def save_images(self, real, fake, step):
-    #     real = real.permute(1, 2, 0).cpu()
-    #     fake = fake.permute(1, 2, 0).cpu()
-    #     img = np.hstack([real, fake])
-    #     img = img * 255
-    #     cv2.imwrite(f'{self.train_settings.image_write_path}/step_{step}.png', img)
-

@@ -3,20 +3,20 @@ from utils import create_anchors, multibox_target
 from config import DatasetConfig, Config, TrainingConfig
 
 class DetectionLoss:
-    anchors = create_anchors(
-                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
-                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
-        )
-    anchors = anchors.to(Config.DEVICE)
     
     def __init__(self):
         # self.anchors = create_anchors(
         #             sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619]],
         #             input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5]]
         # )
-        self.box_criterion = torch.nn.L1Loss(reduction='none')
+        # self.box_criterion = torch.nn.L1Loss(reduction='none')
+        self.box_criterion = torch.nn.MSELoss(reduction='none')
         self.class_criterion = torch.nn.CrossEntropyLoss(reduction='none')
         self.n_classes = DatasetConfig.N_CLASSES + 1
+        self.anchors =  create_anchors(
+                    sizes = [[0.2, 0.272], [0.37, 0.447], [0.54, 0.619], [0.71, 0.79], [0.88, 0.961]],
+                    input_shapes = [[3, 20, 20], [3, 10, 10], [3, 5, 5], [3, 3, 3], [3, 1, 1]]
+        ).to(Config.DEVICE).detach()
 
 
         
@@ -24,7 +24,7 @@ class DetectionLoss:
     def box_loss(self, label, predicted_box):
         # get the ground truth lables dimensions changed to prediction dimensions by using anchors
         # print(label[:, :, :4])
-        bbox_labels, bbox_masks, cls_labels = multibox_target(anchors=DetectionLoss.anchors, labels=label)
+        bbox_labels, bbox_masks, cls_labels = multibox_target(anchors=self.anchors, labels=label)
         # bbox_masks = torch.unsqueeze(bbox_masks,dim=1)
         # bbox_labels = torch.unsqueeze(bbox_labels,dim=1)
         # print(f'anchors: {DetectionLoss.anchors.shape}')
@@ -34,18 +34,33 @@ class DetectionLoss:
         # print(f'predicted_box: {predicted_box.shape}')
         # print((predicted_box*bbox_masks).shape)
 
-        loss = self.box_criterion(bbox_labels*bbox_masks, predicted_box*bbox_masks).mean(dim=1)
+        # loss = self.box_criterion(bbox_labels*bbox_masks, predicted_box*bbox_masks).mean(dim=1)
+        # loss = self.box_criterion(predicted_box*bbox_masks, bbox_labels*bbox_masks).mean(dim=1)
+        # print(bbox_masks.shape)
+        
+        # both working
+        # loss = self.box_criterion(predicted_box*bbox_masks, bbox_labels*bbox_masks).mean(dim=1)
+        loss = self.box_criterion(bbox_labels[bbox_masks > 0], predicted_box[bbox_masks > 0]).mean(dim=0)
+        
+        # print(loss.shape)
+        # print((bbox_labels[bbox_masks > 0])[:12].view(-1, 4), (predicted_box[bbox_masks > 0])[:12].view(-1, 4), bbox_masks[bbox_masks > 0].shape, bbox_masks.shape)
+
         # loss = loss/bbox_labels.shape[0]
         # print(predicted_box.shape)
 
         # bbox_labels = bbox_labels[bbox_masks > 0]
         # predicted_box = predicted_box[bbox_masks > 0]
+        # print(bbox_labels[:20], predicted_box[:20])
+
         # loss = self.box_criterion(predicted_box, bbox_labels)
-        # print(predicted_box.shape)
 
+        # print(label.shape)
+        # tl = label[0][:, 4:]
+        # tl = tl.argmax(dim=1)
 
-        # print(torch.abs(predicted_box-bbox_labels)[:10].view(-1, 1))
-        # print(predicted_box[:10].view(-1, 1), bbox_labels[:10].view(-1, 1))
+        # print(bbox_masks[0].sum())
+
+     
 
         return loss, cls_labels
 
@@ -83,13 +98,28 @@ class DetectionLoss:
         ############ this is good ##############
         # loss = self.class_criterion(prediction_class, cls_labels)
 
+        # print(prediction_class.reshape(-1, self.n_classes).shape, torch.argmax(cls_labels, dim=2).reshape(-1, self.n_classes).shape)
+        # print(prediction_class.shape, cls_labels.shape)
+
+
+        # print(prediction_class.reshape(-1, self.n_classes).shape)
         loss = self.class_criterion(prediction_class.reshape(-1, self.n_classes), 
                                     torch.argmax(cls_labels, dim=2).reshape(-1)).reshape(b_size, -1).mean(dim=1)
+
+        
+        # loss = self.class_criterion(prediction_class.reshape(-1, self.n_classes), 
+        #                             cls_labels.reshape(-1, self.n_classes)).reshape(b_size, -1).mean(dim=1)
         
         # print(self.log_softmax(prediction_class).shape, cls_labels.shape)
         # print(self.log_softmax(prediction_class)[0][0], cls_labels[0][0])
 
         # loss = self.nll_loss(self.log_softmax(prediction_class), torch.argmax(cls_labels, dim=2))
+
+        
+        # t = cls_labels.argmax(dim=2)
+        # t = t[t < 15]
+        # print('assigned_class_anchors: ', t.shape)
+        # print(loss.shape)
         return loss
 
     def calculate_loss(self, label, prediction):
@@ -105,11 +135,10 @@ class DetectionLoss:
         predicted_class = prediction[:, :, 4:]
 
         bbox_loss, cls_labels = self.box_loss(label, predicted_box)
-        # print(predicted_box.shape)
         class_loss = self.class_loss(cls_labels, predicted_class, BATCH_SIZE)
 
-        # print(class_loss, bbox_loss)
-        return bbox_loss, class_loss
+        # print(class_loss.mean(dim=0), bbox_loss)
+        return bbox_loss, class_loss.mean(dim=0)
     
 
     def __call__(self, label, prediction):

@@ -9,6 +9,7 @@ from config import TrainingConfig, DatasetConfig
 class TrainingParameters:
     def __init__(self, args):
         self.LEARNING_RATE = TrainingConfig.LEARNING_RATE  
+        self.LR_DECAY_RATE = TrainingConfig.LR_DECAY_RATE  
         self.BATCH_SIZE = TrainingConfig.BATCH_SIZE
         self.IMAGE_SIZE = DatasetConfig.IMAGE_SIZE
         self.CHANNELS_IMG = DatasetConfig.IMAGE_CHANNELS
@@ -34,5 +35,5 @@ if __name__ == '__main__':
 
     tp = TrainingParameters(args)
     trainer = DetectionTrainer()
-    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_1900.pt")
+    # trainer = DetectionTrainer(path=f"{args.exp_name}/checkpoints/checkpoint_6000.pt")
     trainer.train(train_params=tp)

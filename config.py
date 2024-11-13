@@ -2,8 +2,9 @@ import torch
 
 
 class TrainingConfig:
-    LEARNING_RATE = 0.0003
-    BATCH_SIZE = 16
+    LEARNING_RATE = 0.0001
+    LR_DECAY_RATE = 0.8
+    BATCH_SIZE = 32
     NUM_EPOCHS = 5
     NUM_STEPS = 20000
     OPTIMIZER = 'adam'
