@@ -79,31 +79,31 @@ class Detector(nn.Module):
         class_20x20_reshape = self.reshape_class(class_20x20)
 
         box_20x20 = self.box20x20_1(maxpool2d_4)
-        box_20x20_reshape = Reshape(last_dim_shape=self.box_shape)(box_20x20)
+        box_20x20_reshape = self.reshape_box(box_20x20)
 
         class_10x10 = self.class10x10(maxpool2d_5)
-        class_10x10_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_10x10)
+        class_10x10_reshape = self.reshape_class(class_10x10)
 
         box_10x10 = self.box10x10_1(maxpool2d_5)
-        box_10x10_reshape = Reshape(last_dim_shape=self.box_shape)(box_10x10)
+        box_10x10_reshape = self.reshape_box(box_10x10)
 
         class_5x5 = self.class5x5(maxpool2d_6)
-        class_5x5_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_5x5)
+        class_5x5_reshape = self.reshape_class(class_5x5)
 
         box_5x5 = self.box5x5_1(maxpool2d_6)
-        box_5x5_reshape = Reshape(last_dim_shape=self.box_shape)(box_5x5)
+        box_5x5_reshape = self.reshape_box(box_5x5)
 
         class_3x3 = self.class3x3(conv_7)
-        class_3x3_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_3x3)
+        class_3x3_reshape = self.reshape_class(class_3x3)
 
         box_3x3 = self.box3x3_1(conv_7)
-        box_3x3_reshape = Reshape(last_dim_shape=self.box_shape)(box_3x3)
+        box_3x3_reshape = self.reshape_box(box_3x3)
 
         class_1x1 = self.class1x1(conv_8)
-        class_1x1_reshape = Reshape(last_dim_shape=self.out_class_shape)(class_1x1)
+        class_1x1_reshape = self.reshape_class(class_1x1)
 
         box_1x1 = self.box1x1_1(conv_8)
-        box_1x1_reshape = Reshape(last_dim_shape=self.box_shape)(box_1x1)
+        box_1x1_reshape = self.reshape_box(box_1x1)
 
         class_out = Concatenate(dim=1)([class_20x20_reshape, class_10x10_reshape, class_5x5_reshape, class_3x3_reshape, class_1x1_reshape])
         box_out = Concatenate(dim=1)([box_20x20_reshape, box_10x10_reshape, box_5x5_reshape, box_3x3_reshape, box_1x1_reshape])

@@ -35,7 +35,7 @@ def check_dataset():
 
 # generate random cordinates with random size given a class id
 def get_random_cords(class_id):
-    size = np.random.randint(50, 160)
+    size = np.random.randint(80, 130)
     animal_image = animals[class_id]['image'].resize((size, size), Image.LANCZOS)
     row = np.random.randint(0, 320-size)
     col = np.random.randint(0, 320-size)

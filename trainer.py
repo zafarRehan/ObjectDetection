@@ -8,6 +8,35 @@ from dataset import data_generator
 from utils import process_prediction, draw_bbox
 from config import Config
 
+
+class ScheduledOptimizer():
+    '''A simple wrapper class for learning rate scheduling'''
+    def __init__(self, optimizer, lr_mul, min_lr):
+        self._optimizer = optimizer
+        self.lr_mul = lr_mul
+        self.n_steps = 0
+        self.min_lr = min_lr
+
+
+    def step_and_update_lr(self):
+        "Step with the inner optimizer"
+        self._update_learning_rate()
+        self._optimizer.step()
+
+
+    def zero_grad(self):
+        "Zero out the gradients with the inner optimizer"
+        self._optimizer.zero_grad()
+
+
+    def _update_learning_rate(self):
+        ''' Learning rate scheduling per step '''
+        lr = max(self.lr_mul * self._optimizer.param_groups[-1]['lr'], self.min_lr)
+
+        for param_group in self._optimizer.param_groups:
+            param_group['lr'] = lr
+
+
 class DetectionTrainer:
     def __init__(self, path=None):
         self.detector = Detector() 
@@ -23,14 +52,15 @@ class DetectionTrainer:
     def train(self, train_params):
         self.train_settings = train_params
         img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
-        self.optimizer = self.init_optimizer()
+        self.init_optimizer()
 
         trained_step = 0
         if self.detector.checkpoint is not None:
             self.optimizer.load_state_dict(self.detector.checkpoint['optimizer_state_dict'])
             trained_step = self.detector.checkpoint['step']
-        scheduler = optim.lr_scheduler.MultiplicativeLR(optimizer=self.optimizer, lr_lambda=lambda step: train_params.LR_DECAY_RATE)
-
+        scheduler = ScheduledOptimizer(optimizer=self.optimizer, 
+                                       lr_mul=train_params.LR_DECAY_RATE, 
+                                       min_lr=train_params.MIN_LR)
         
 
         self.detector.train()
@@ -38,12 +68,11 @@ class DetectionTrainer:
             self.optimizer.zero_grad()
             img, label = next(data_generator(batch_size=train_params.BATCH_SIZE, nObjects=4))
             data = img['image']
+
             label = torch.Tensor(label).to(self.device)
-            # pred = self.detector(torch.permute(torch.Tensor(data).to(self.device), (0, 3, 1, 2)))
             pred = self.detector.infer(data)
             box_loss, class_loss = self.detection_loss(label=label, prediction=pred)
 
-            # self.detector.zero_grad()
             total_loss = box_loss + class_loss
             total_loss.mean().backward()
             self.optimizer.step()
@@ -54,18 +83,16 @@ class DetectionTrainer:
                 self.save_log(step, img, label.cpu().numpy())
                 self.save_checkpoint(step)
 
-                if step%(self.train_settings.SAVE_INTERVAL*5) == 0:
-                    scheduler.step()
+                if step%(self.train_settings.SAVE_INTERVAL * self.train_settings.LR_UPDATE) == 0:
+                    scheduler.step_and_update_lr()
                     print(f"learning_rate: {self.optimizer.param_groups[-1]['lr']}")
 
 
     def init_optimizer(self):
         if self.train_settings.OPTIMIZER == 'adam':
-            optimizer = optim.Adam(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
+            self.optimizer = optim.Adam(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
         else:
-            optimizer = optim.SGD(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
-        return optimizer
-        
+            self.optimizer = optim.SGD(self.detector.parameters(), lr=self.train_settings.LEARNING_RATE)
 
 
     def save_log(self, step, data, label):
@@ -73,8 +100,7 @@ class DetectionTrainer:
         img_stack = []
         lab_stack = []
         bsize = 4
-        data, label = next(data_generator(batch_size=bsize, nObjects=4))
-
+        data, label = next(data_generator(batch_size=bsize, nObjects=5))
 
         with torch.no_grad():
             batch_pred = self.detector.infer(data['image'])
